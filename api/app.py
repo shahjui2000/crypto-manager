@@ -4,6 +4,9 @@ import urllib
 import os
 from dotenv import load_dotenv
 import json
+import boto3
+import time
+import hashlib
 
 # Load secret API file
 load_dotenv()
@@ -12,9 +15,22 @@ NOMICS_API_KEY = os.getenv('NOMICS_API_KEY')
 
 # Errors
 ERR_RESP = "Page Not Found"
+ERR_ACC = "Account not created"
+ERR_UPD = "Data not updated"
+ERR_GET = "Data not found"
+
+# Initialize database
+dynamodb = boto3.resource('dynamodb')
+TABLE_NAME = 'crypto-manager'
 
 app = Flask(__name__)
 
+@app.route('/', methods=['GET'])
+def helloWorld():
+	return jsonify('Welcome to Crypto Manager')
+
+# TODO: Add SHA-256 or JSW token auth for secure APIs
+# TODO: Modify response of every endpoint -> statusCode and body
 
 ########################
 ####### MetaData #######
@@ -201,6 +217,378 @@ def getMultiCryptosPriceConversions():
 		print(e)
 		response = ERR_RESP
 	return response
+
+
+########################
+####### Database #######
+########################
+
+# Ref for boto3 setup: https://medium.com/@aastha6348/easy-wizy-crud-operations-in-dynamodb-with-boto3-6d2844f150b5
+
+# Creates a new account along with custom watchlist and portfolio
+@app.route('/user/account/create', methods=['POST'])
+def addNewUser():
+	try:
+		table = dynamodb.Table(TABLE_NAME)
+		userID = str(int(time.time()))
+		response = table.put_item(
+			# TODO: Add regex for input fields
+			Item = {
+				'userID': userID,
+				'email': request.form['email'],
+				'password': hashlib.sha256(request.form['email'].encode()).hexdigest(),
+				'first_name': request.form['first_name'],
+				'last_name': request.form['last_name'],
+				'aadhar_card_no': request.form['aadhar_card_no'],
+				'pan_card_no': request.form['pan_card_no'],
+				'mobile_no': request.form['mobile_no'],
+				'funds': 0,
+				'invested_amount': 0,
+				'current_amount': 0,
+				'p_and_l': 0,
+				'watchlist_count': 0,
+				'portfolio_count': 0
+			} 
+		)
+
+		# TODO: Check if the entry is successful or not and then proceed with creating other tables
+
+		# Create watchlist and portfolio tables
+		table = dynamodb.create_table(
+			TableName=userID + "_watchlist",
+			KeySchema=[ 
+				{
+					'AttributeName': 'id',
+					'KeyType': 'HASH'
+				}
+			],
+			AttributeDefinitions=[
+				{
+					'AttributeName': 'id',
+					'AttributeType': 'N'
+				}
+			],
+			ProvisionedThroughput={
+				'ReadCapacityUnits': 5,
+				'WriteCapacityUnits': 5
+			}
+    	)
+
+		table = dynamodb.create_table(
+			TableName=userID + "_portfolio",
+			KeySchema=[ 
+				{
+					'AttributeName': 'id',
+					'KeyType': 'HASH'
+				}
+			],
+			AttributeDefinitions=[
+				{
+					'AttributeName': 'id',
+					'AttributeType': 'N'
+				}
+			],
+			ProvisionedThroughput={
+				'ReadCapacityUnits': 5,
+				'WriteCapacityUnits': 5
+			}
+    	)
+		
+		# TODO: Wait until the table is created (show some loading) -> It takes some time to allocate resources for a table in DynamoDB
+
+		response = jsonify(response['ResponseMetadata']['HTTPStatusCode'])
+	except Exception as e:
+		print(e)
+		response = ERR_ACC
+	return response
+
+# Account Related Queries
+
+# Updates funds
+@app.route('/user/update/funds', methods=['POST'])
+def updateUserFunds():
+	try:
+		table = dynamodb.Table(TABLE_NAME)
+		scan = table.scan()
+		response = ""
+		for each in scan['Items']:
+			if each['email'] == request.form['email'] and each['aadhar_card_no'] == request.form['aadhar_card_no'] and each['pan_card_no'] == request.form['pan_card_no']:
+				userID = each['userID']
+				response = table.update_item(
+					Key = {
+						'userID': userID
+					},
+					UpdateExpression = "set funds = :r",
+					ExpressionAttributeValues = {
+						':r': request.form['funds']
+					},
+					ReturnValues = "UPDATED_NEW"
+				)
+				break
+		return json.dumps(response)
+	except Exception as e:
+		print(e)
+		response = ERR_UPD
+	return response
+
+# Get funds
+@app.route('/user/get/funds', methods=['GET'])
+def getUserFunds():
+	try:
+		table = dynamodb.Table(TABLE_NAME)
+		scan = table.scan()
+		response = ""
+		for each in scan['Items']:
+			if each['email'] == request.form['email'] and each['aadhar_card_no'] == request.form['aadhar_card_no'] and each['pan_card_no'] == request.form['pan_card_no']:
+				response = each['funds']
+				break
+		return json.dumps(response)
+	except Exception as e:
+		print(e)
+		response = ERR_GET
+	return response
+
+# Updates invested amount
+@app.route('/user/update/invested_amount', methods=['POST'])
+def updateUserInvestedAmount():
+	try:
+		table = dynamodb.Table(TABLE_NAME)
+		scan = table.scan()
+		response = ""
+		for each in scan['Items']:
+			if each['email'] == request.form['email'] and each['aadhar_card_no'] == request.form['aadhar_card_no'] and each['pan_card_no'] == request.form['pan_card_no']:
+				userID = each['userID']
+				response = table.update_item(
+					Key = {
+						'userID': userID
+					},
+					UpdateExpression = "set invested_amount = :r",
+					ExpressionAttributeValues = {
+						':r': request.form['invested_amount']
+					},
+					ReturnValues = "UPDATED_NEW"
+				)
+				break
+		return json.dumps(response)
+	except Exception as e:
+		print(e)
+		response = ERR_UPD
+	return response
+
+# Get invested amount
+@app.route('/user/get/invested_amount', methods=['GET'])
+def getUserInvestedAmount():
+	try:
+		table = dynamodb.Table(TABLE_NAME)
+		scan = table.scan()
+		response = ""
+		for each in scan['Items']:
+			if each['email'] == request.form['email'] and each['aadhar_card_no'] == request.form['aadhar_card_no'] and each['pan_card_no'] == request.form['pan_card_no']:
+				response = each['invested_amount']
+				break
+		return json.dumps(response)
+	except Exception as e:
+		print(e)
+		response = ERR_GET
+	return response
+
+# Updates current amount
+@app.route('/user/update/current_amount', methods=['POST'])
+def updateUserCurrentAmount():
+	try:
+		table = dynamodb.Table(TABLE_NAME)
+		scan = table.scan()
+		response = ""
+		for each in scan['Items']:
+			if each['email'] == request.form['email'] and each['aadhar_card_no'] == request.form['aadhar_card_no'] and each['pan_card_no'] == request.form['pan_card_no']:
+				userID = each['userID']
+				response = table.update_item(
+					Key = {
+						'userID': userID
+					},
+					UpdateExpression = "set current_amount = :r",
+					ExpressionAttributeValues = {
+						':r': request.form['current_amount']
+					},
+					ReturnValues = "UPDATED_NEW"
+				)
+				break
+		return json.dumps(response)
+	except Exception as e:
+		print(e)
+		response = ERR_UPD
+	return response
+
+# Get current amount
+@app.route('/user/get/current_amount', methods=['GET'])
+def getUserCurrentAmount():
+	try:
+		table = dynamodb.Table(TABLE_NAME)
+		scan = table.scan()
+		response = ""
+		for each in scan['Items']:
+			if each['email'] == request.form['email'] and each['aadhar_card_no'] == request.form['aadhar_card_no'] and each['pan_card_no'] == request.form['pan_card_no']:
+				response = each['current_amount']
+				break
+		return json.dumps(response)
+	except Exception as e:
+		print(e)
+		response = ERR_GET
+	return response
+
+# Updates profit and loss
+@app.route('/user/update/p_and_l', methods=['POST'])
+def updateUserProfitAndLoss():
+	try:
+		table = dynamodb.Table(TABLE_NAME)
+		scan = table.scan()
+		response = ""
+		for each in scan['Items']:
+			if each['email'] == request.form['email'] and each['aadhar_card_no'] == request.form['aadhar_card_no'] and each['pan_card_no'] == request.form['pan_card_no']:
+				userID = each['userID']
+				response = table.update_item(
+					Key = {
+						'userID': userID
+					},
+					UpdateExpression = "set p_and_l = :r",
+					ExpressionAttributeValues = {
+						':r': request.form['p_and_l']
+					},
+					ReturnValues = "UPDATED_NEW"
+				)
+				break
+		return json.dumps(response)
+	except Exception as e:
+		print(e)
+		response = ERR_UPD
+	return response
+
+# Get profit and loss
+@app.route('/user/get/p_and_l', methods=['GET'])
+def getUserProfitAndLoss():
+	try:
+		table = dynamodb.Table(TABLE_NAME)
+		scan = table.scan()
+		response = ""
+		for each in scan['Items']:
+			if each['email'] == request.form['email'] and each['aadhar_card_no'] == request.form['aadhar_card_no'] and each['pan_card_no'] == request.form['pan_card_no']:
+				response = each['p_and_l']
+				break
+		return json.dumps(response)
+	except Exception as e:
+		print(e)
+		response = ERR_GET
+	return response
+
+
+# Porfolio related queries
+
+# Add crypto to portfolio
+# NOTE: Check for duplicate ticks while fetching data | selling the same tick with different quanity
+@app.route('/user/portfolio/add', methods=['POST'])
+def addCryptoToPorfolio():
+	try:
+		table = dynamodb.Table(TABLE_NAME)
+		scan = table.scan()
+		userID = ""
+		cryptoCount = ""
+		response = ""
+		for each in scan['Items']:
+			if each['email'] == request.form['email'] and each['aadhar_card_no'] == request.form['aadhar_card_no'] and each['pan_card_no'] == request.form['pan_card_no']:
+				userID = each['userID']
+				cryptoCount = each['portfolio_count']
+				break
+
+		portfolioTable = dynamodb.Table(userID + "_portfolio")
+		response = portfolioTable.put_item(
+			Item = {
+				'id': int(time.time()),
+				'tick': request.form['tick'],
+				'quantity': request.form['quantity'],
+				'investmentPrice': request.form['investmentPrice']
+			} 
+		)
+
+		response = table.update_item(
+			Key = {
+				'userID': userID
+			},
+			UpdateExpression = "set portfolio_count = :r",
+			ExpressionAttributeValues = {
+				':r': str(int(cryptoCount) + 1)
+			},
+			ReturnValues = "UPDATED_NEW"
+		)
+		return json.dumps(response)
+	except Exception as e:
+		print(e)
+		response = ERR_UPD
+	return response
+
+# Remove crypto from portfolio
+@app.route('/user/portfolio/remove', methods=['POST'])
+def removeCryptoFromPorfolio():
+	try:
+		table = dynamodb.Table(TABLE_NAME)
+		scan = table.scan()
+		userID = ""
+		cryptoCount = ""
+		response = ""
+		for each in scan['Items']:
+			if each['email'] == request.form['email'] and each['aadhar_card_no'] == request.form['aadhar_card_no'] and each['pan_card_no'] == request.form['pan_card_no']:
+				userID = each['userID']
+				cryptoCount = each['portfolio_count']
+				break
+
+		portfolioTable = dynamodb.Table(userID + "_portfolio")
+		deletionCount = 0
+		scan = portfolioTable.scan()
+		for each in scan['Items']:
+			if each['tick'] == request.form['tick']:
+				cryptoID = each['id']
+				portfolioTable.delete_item(
+					Key = {
+						'id': cryptoID
+					}
+				)
+				deletionCount += 1
+
+		response = table.update_item(
+			Key = {
+				'userID': userID
+			},
+			UpdateExpression = "set portfolio_count = :r",
+			ExpressionAttributeValues = {
+				':r': str(int(cryptoCount) - deletionCount)
+			},
+			ReturnValues = "UPDATED_NEW"
+		)
+		return json.dumps(response)
+	except Exception as e:
+		print(e)
+		response = ERR_UPD
+	return response
+
+# Temporary endpoint for checking Doughnut Chart functionality
+@app.route('/temp/data')
+def sendTempData():
+	data = {
+		"data": [
+			{
+				'coin': 'BTC',
+				'percentage': 50
+			},
+			{
+				'coin': 'ETH',
+				'percentage': 25
+			},
+			{
+				'coin': 'LTC',
+				'percentage': 25
+			}
+		]
+	}
+	return jsonify(data)
 
 if __name__ == '__main__':
     app.run()
