@@ -14,7 +14,7 @@
 - Start virtual environment: `source venv/bin/activate`
 - Install dependencies: `pip install -r requirements.txt`
 - Get your api keys from [Crypto Compare](https://min-api.cryptocompare.com/pricing) and [Nomics](https://p.nomics.com/cryptocurrency-bitcoin-api)
-- Create a `.env` file in the `api` folder and paste the api keys: `touch .env && echo CRYPTO_API_KEY=<crypto_key> >> .env && echo NOMICS_API_KEY=<nomics_key> >> .env`
+- Create a `.env` file in the `api` folder and paste the api keys: `touch .env && echo CRYPTO_API_KEY=9eeada668414786f4d06ae7c540a8d0377678264efa9c9dbcfe563d673839998 >> .env && echo NOMICS_API_KEY=09a87b15aa38acaab9cf707f8895f7b8 >> .env`
 
 #### Starting the project
 
